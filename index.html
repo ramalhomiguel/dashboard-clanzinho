@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SCOREBOARD // Painel do Clã</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg-0:#11151a;
+    --bg-1:#171d24;
+    --bg-2:#1e262f;
+    --line:#2a333d;
+    --ct-gold:#e8a33d;
+    --t-red:#d6534a;
+    --kill-teal:#5ba88f;
+    --ink-0:#eef2f5;
+    --ink-1:#9fadb8;
+    --ink-2:#6b7885;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 15% 0%, rgba(232,163,61,0.07), transparent 40%),
+      radial-gradient(circle at 85% 20%, rgba(91,168,143,0.06), transparent 45%),
+      var(--bg-0);
+    color:var(--ink-0);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{font-family:'JetBrains Mono',monospace;}
+  h1,h2,h3,.display{font-family:'Rajdhani',sans-serif;text-transform:uppercase;letter-spacing:0.02em;}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important; transition:none !important;}
+  }
+
+  /* ---------- layout shell ---------- */
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px 80px;}
+
+  /* ---------- top HUD bar ---------- */
+  .hud-bar{
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+  }
+  .hud-inner{
+    max-width:1180px;margin:0 auto;padding:14px 24px;
+    display:flex;align-items:center;justify-content:space-between;
+    font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:0.08em;color:var(--ink-2);
+  }
+  .hud-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--kill-teal);margin-right:8px;box-shadow:0 0 8px var(--kill-teal);animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.35;}}
+
+  /* ---------- hero ---------- */
+  .hero{padding:64px 0 40px;position:relative;}
+  .hero-eyebrow{
+    font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ct-gold);
+    letter-spacing:0.18em;text-transform:uppercase;margin-bottom:14px;
+    opacity:0;transform:translateY(8px);animation:riseIn 0.6s ease forwards;
+  }
+  h1.title{
+    font-size:clamp(2.6rem,7vw,4.6rem);font-weight:700;line-height:0.95;margin:0 0 18px;
+    background:linear-gradient(180deg,#fff, #c9d3da 70%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    opacity:0;transform:translateY(14px);animation:riseIn 0.7s 0.08s ease forwards;
+  }
+  .hero-sub{
+    max-width:560px;color:var(--ink-1);font-size:15.5px;line-height:1.6;margin-bottom:36px;
+    opacity:0;transform:translateY(10px);animation:riseIn 0.7s 0.18s ease forwards;
+  }
+  .hero-sub b{color:var(--ink-0);font-weight:600;}
+  @keyframes riseIn{to{opacity:1;transform:translateY(0);}}
+
+  .hero-stats{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
+    opacity:0;animation:riseIn 0.7s 0.26s ease forwards;
+  }
+  .hero-stat{background:var(--bg-1);padding:20px 18px;}
+  .hero-stat .v{font-size:clamp(1.6rem,3.4vw,2.2rem);font-weight:700;font-family:'JetBrains Mono',monospace;}
+  .hero-stat .l{font-size:11.5px;color:var(--ink-2);letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+  @media (max-width:640px){.hero-stats{grid-template-columns:repeat(2,1fr);}}
+
+  /* ---------- section headers ---------- */
+  .section{padding-top:56px;}
+  .section-head{display:flex;align-items:baseline;gap:12px;margin-bottom:22px;}
+  .section-head .idx{font-family:'JetBrains Mono',monospace;color:var(--ink-2);font-size:13px;}
+  .section-head h2{font-size:1.5rem;margin:0;font-weight:600;color:var(--ink-0);}
+  .section-head .rule{flex:1;height:1px;background:var(--line);}
+
+  /* ---------- leaderboard / MVP cards ---------- */
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+  @media (max-width:860px){.cards{grid-template-columns:1fr;}}
+  .card{
+    background:var(--bg-1);border:1px solid var(--line);border-radius:var(--radius);
+    padding:22px 22px 20px;position:relative;overflow:hidden;
+    opacity:0;transform:translateY(16px);
+  }
+  .card.reveal{animation:riseIn 0.55s ease forwards;}
+  .card::before{
+    content:"";position:absolute;top:0;left:0;right:0;height:2px;
+    background:var(--accent,var(--ct-gold));
+  }
+  .card .tag{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-2);letter-spacing:0.1em;text-transform:uppercase;}
+  .card .who{font-size:1.5rem;font-weight:700;font-family:'Rajdhani',sans-serif;margin:10px 0 2px;color:var(--ink-0);}
+  .card .metric{font-family:'JetBrains Mono',monospace;font-size:2.1rem;font-weight:700;color:var(--accent,var(--ct-gold));line-height:1;margin-top:10px;}
+  .card .metric-label{font-size:12px;color:var(--ink-2);margin-top:6px;}
+
+  /* ---------- chart grid ---------- */
+  .chart-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;}
+  @media (max-width:900px){.chart-grid{grid-template-columns:1fr;}}
+  .panel{
+    background:var(--bg-1);border:1px solid var(--line);border-radius:var(--radius);padding:20px 20px 12px;
+    opacity:0;transform:translateY(16px);
+  }
+  .panel.reveal{animation:riseIn 0.55s ease forwards;}
+  .panel h3{font-size:1rem;margin:0 0 4px;font-weight:600;color:var(--ink-0);text-transform:none;letter-spacing:0;font-family:'Inter',sans-serif;}
+  .panel .hint{font-size:12px;color:var(--ink-2);margin-bottom:14px;}
+  .panel .canvas-wrap{position:relative;height:280px;}
+  .panel .canvas-wrap.tall{height:340px;}
+
+  /* ---------- table ---------- */
+  .table-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg-1);}
+  table{width:100%;border-collapse:collapse;min-width:640px;font-size:14px;}
+  thead th{
+    text-align:left;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.08em;
+    text-transform:uppercase;color:var(--ink-2);padding:14px 16px;border-bottom:1px solid var(--line);
+    cursor:pointer;user-select:none;white-space:nowrap;
+  }
+  thead th:hover{color:var(--ct-gold);}
+  thead th .arrow{opacity:0.4;margin-left:4px;font-size:10px;}
+  tbody td{padding:13px 16px;border-bottom:1px solid var(--line);font-family:'JetBrains Mono',monospace;font-size:13.5px;}
+  tbody td:first-child{font-family:'Inter',sans-serif;font-weight:600;color:var(--ink-0);}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:rgba(255,255,255,0.02);}
+  .pos{display:inline-block;width:22px;color:var(--ink-2);}
+  .kd-good{color:var(--kill-teal);}
+  .kd-bad{color:var(--t-red);}
+
+  footer{margin-top:70px;padding-top:24px;border-top:1px solid var(--line);color:var(--ink-2);font-size:12.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+
+  #loading{
+    position:fixed;inset:0;background:var(--bg-0);display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:14px;z-index:50;transition:opacity 0.4s ease;
+  }
+  #loading .l-txt{font-family:'JetBrains Mono',monospace;color:var(--ink-2);font-size:13px;letter-spacing:0.1em;}
+  .spinner{width:34px;height:34px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--ct-gold);animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  #error-box{display:none;max-width:640px;margin:80px auto;padding:24px;border:1px solid var(--t-red);border-radius:var(--radius);background:var(--bg-1);}
+  #error-box h3{color:var(--t-red);margin-top:0;}
+  #error-box code{background:var(--bg-2);padding:2px 6px;border-radius:4px;font-size:13px;}
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spinner"></div><div class="l-txt">CARREGANDO DADOS DA PARTIDA...</div></div>
+
+<div id="error-box">
+  <h3>Não foi possível carregar database.xlsx</h3>
+  <p>Verifique se o arquivo <code>database.xlsx</code> está na mesma pasta do <code>index.html</code>, com as colunas
+  <code>Integrante, Kills, Mortes, Assistencias, MVP, Pontos, Id_Partida</code>.</p>
+  <p>Se você abriu este arquivo direto do computador (duplo clique), o navegador pode bloquear a leitura local.
+  Publique no GitHub Pages ou rode um servidor local (veja o README).</p>
+</div>
+
+<div id="app" style="display:none;">
+  <div class="hud-bar">
+    <div class="hud-inner">
+      <span><span class="hud-dot"></span>SISTEMA DE ESTATÍSTICAS — CS</span>
+      <span id="hud-updated">ATUALIZADO: —</span>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <section class="hero">
+      <div class="hero-eyebrow">// relatório de desempenho do clã</div>
+      <h1 class="title" id="clan-title">SCOREBOARD</h1>
+      <p class="hero-sub">Estatísticas consolidadas de todas as partidas registradas na planilha.
+        <b>Substitua o arquivo <code>database.xlsx</code></b> por uma nova versão a qualquer momento —
+        este painel recalcula tudo sozinho, sem precisar editar nenhum código.</p>
+      <div class="hero-stats" id="hero-stats"></div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><span class="idx">01</span><h2>Destaques</h2><div class="rule"></div></div>
+      <div class="cards" id="highlight-cards"></div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><span class="idx">02</span><h2>Kills &amp; K/D por jogador</h2><div class="rule"></div></div>
+      <div class="chart-grid">
+        <div class="panel"><h3>Total de kills</h3><p class="hint">Soma de abates em todas as partidas registradas</p>
+          <div class="canvas-wrap"><canvas id="chart-kills"></canvas></div>
+        </div>
+        <div class="panel"><h3>Ranking de K/D</h3><p class="hint">Kills ÷ mortes (quanto maior, melhor)</p>
+          <div class="canvas-wrap"><canvas id="chart-kd"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><span class="idx">03</span><h2>Evolução por partida</h2><div class="rule"></div></div>
+      <div class="panel">
+        <h3>Pontuação ao longo das partidas</h3><p class="hint">Cada linha é um jogador — acompanhe consistência e picos de desempenho</p>
+        <div class="canvas-wrap tall"><canvas id="chart-evolution"></canvas></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><span class="idx">04</span><h2>Perfil comparativo</h2><div class="rule"></div></div>
+      <div class="chart-grid">
+        <div class="panel"><h3>Radar dos top jogadores</h3><p class="hint">Kills, assistências, MVPs e pontos médios normalizados (0–100)</p>
+          <div class="canvas-wrap tall"><canvas id="chart-radar"></canvas></div>
+        </div>
+        <div class="panel"><h3>Distribuição de MVPs</h3><p class="hint">Quem carrega o time com mais frequência</p>
+          <div class="canvas-wrap tall"><canvas id="chart-mvp"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><span class="idx">05</span><h2>Tabela completa</h2><div class="rule"></div></div>
+      <div class="table-scroll">
+        <table id="stats-table">
+          <thead><tr>
+            <th data-key="name">Jogador</th>
+            <th data-key="matchesPlayed">Partidas</th>
+            <th data-key="kills">Kills</th>
+            <th data-key="deaths">Mortes</th>
+            <th data-key="assists">Assist.</th>
+            <th data-key="kd">K/D</th>
+            <th data-key="mvp">MVPs</th>
+            <th data-key="points">Pontos</th>
+            <th data-key="avgPoints">Média/partida</th>
+          </tr></thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>
+      <span>Gerado automaticamente a partir de database.xlsx</span>
+      <span id="hud-updated-2">—</span>
+    </footer>
+  </div>
+</div>
+
+<script>
+const CLAN_NAME = "SCOREBOARD"; // troque pelo nome do seu clã
+
+const COLORS = ['#e8a33d','#5ba88f','#d6534a','#7aa5c9','#c98fd6','#e0c15a','#8fb8a8','#d68f9f'];
+
+function colorFor(i){ return COLORS[i % COLORS.length]; }
+
+async function boot(){
+  try{
+    const res = await fetch('database.xlsx', {cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const buf = await res.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, {defval:0});
+    if(!rows.length) throw new Error('planilha vazia');
+    render(rows);
+    document.getElementById('loading').style.display='none';
+    document.getElementById('app').style.display='block';
+  }catch(err){
+    console.error(err);
+    document.getElementById('loading').style.display='none';
+    document.getElementById('error-box').style.display='block';
+  }
+}
+
+function aggregate(rows){
+  const players = {};
+  rows.forEach(r=>{
+    const name = String(r.Integrante ?? '').trim();
+    if(!name) return;
+    if(!players[name]){
+      players[name] = {name, kills:0, deaths:0, assists:0, mvp:0, points:0, matches:new Set(), history:[]};
+    }
+    const p = players[name];
+    const kills = Number(r.Kills)||0, deaths = Number(r.Mortes)||0, assists = Number(r.Assistencias)||0,
+          mvp = Number(r.MVP)||0, points = Number(r.Pontos)||0, matchId = r.Id_Partida;
+    p.kills += kills; p.deaths += deaths; p.assists += assists; p.mvp += mvp; p.points += points;
+    p.matches.add(matchId);
+    p.history.push({match:matchId, kills, deaths, assists, points});
+  });
+  return Object.values(players).map(p=>{
+    const matchesPlayed = p.matches.size;
+    p.history.sort((a,b)=> a.match - b.match);
+    return {
+      ...p,
+      matchesPlayed,
+      kd: p.deaths>0 ? p.kills/p.deaths : p.kills,
+      avgPoints: matchesPlayed>0 ? p.points/matchesPlayed : 0,
+    };
+  });
+}
+
+function fmt(n, d=0){ return n.toLocaleString('pt-BR', {minimumFractionDigits:d, maximumFractionDigits:d}); }
+
+function render(rows){
+  const players = aggregate(rows);
+  const totalMatches = new Set(rows.map(r=>r.Id_Partida)).size;
+  const totalKills = players.reduce((s,p)=>s+p.kills,0);
+  const totalMvp = players.reduce((s,p)=>s+p.mvp,0);
+
+  document.getElementById('clan-title').textContent = CLAN_NAME;
+  const now = new Date().toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric'});
+  document.getElementById('hud-updated').textContent = 'ATUALIZADO: '+now;
+  document.getElementById('hud-updated-2').textContent = 'Última atualização: '+now;
+
+  // hero stats
+  const heroStats = [
+    {v: players.length, l:'Jogadores'},
+    {v: totalMatches, l:'Partidas registradas'},
+    {v: totalKills, l:'Kills totais do clã'},
+    {v: totalMvp, l:'MVPs distribuídos'},
+  ];
+  document.getElementById('hero-stats').innerHTML = heroStats.map(s=>
+    `<div class="hero-stat"><div class="v">${fmt(s.v)}</div><div class="l">${s.l}</div></div>`
+  ).join('');
+
+  // highlight cards
+  const byKd = [...players].sort((a,b)=>b.kd-a.kd)[0];
+  const byActive = [...players].sort((a,b)=>b.matchesPlayed-a.matchesPlayed)[0];
+  const byKills = [...players].sort((a,b)=>b.kills-a.kills)[0];
+
+  const cardsData = [
+    {tag:'Maior K/D', p:byKd, metric:fmt(byKd.kd,2), label:`${fmt(byKd.kills)} kills / ${fmt(byKd.deaths)} mortes`, accent:'var(--kill-teal)'},
+    {tag:'Mais ativo', p:byActive, metric:fmt(byActive.matchesPlayed), label:'partidas disputadas', accent:'var(--ct-gold)'},
+    {tag:'Maior número de kills', p:byKills, metric:fmt(byKills.kills), label:`em ${fmt(byKills.matchesPlayed)} partidas`, accent:'var(--t-red)'},
+  ];
+  document.getElementById('highlight-cards').innerHTML = cardsData.map(c=>
+    `<div class="card" style="--accent:${c.accent}">
+      <div class="tag">${c.tag}</div>
+      <div class="who">${c.p.name}</div>
+      <div class="metric">${c.metric}</div>
+      <div class="metric-label">${c.label}</div>
+    </div>`
+  ).join('');
+
+  // table
+  renderTable(players);
+
+  // charts
+  const sortedByKills = [...players].sort((a,b)=>b.kills-a.kills);
+  const sortedByKd = [...players].sort((a,b)=>b.kd-a.kd);
+
+  new Chart(document.getElementById('chart-kills'), {
+    type:'bar',
+    data:{ labels: sortedByKills.map(p=>p.name),
+      datasets:[{ data: sortedByKills.map(p=>p.kills), backgroundColor: sortedByKills.map((_,i)=>colorFor(i)), borderRadius:6, maxBarThickness:38 }] },
+    options: baseBarOptions()
+  });
+
+  new Chart(document.getElementById('chart-kd'), {
+    type:'bar',
+    data:{ labels: sortedByKd.map(p=>p.name),
+      datasets:[{ data: sortedByKd.map(p=>Number(p.kd.toFixed(2))), backgroundColor: sortedByKd.map((_,i)=>colorFor(i)), borderRadius:6, maxBarThickness:38 }] },
+    options: baseBarOptions()
+  });
+
+  // evolution line chart
+  const matchIds = [...new Set(rows.map(r=>r.Id_Partida))].sort((a,b)=>a-b);
+  new Chart(document.getElementById('chart-evolution'), {
+    type:'line',
+    data:{
+      labels: matchIds.map(m=>'Partida '+m),
+      datasets: players.map((p,i)=>({
+        label:p.name,
+        data: matchIds.map(m=>{ const h = p.history.find(x=>x.match===m); return h ? h.points : null; }),
+        borderColor: colorFor(i), backgroundColor: colorFor(i),
+        spanGaps:true, tension:0.35, pointRadius:3, borderWidth:2
+      }))
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{ legend:{ position:'bottom', labels:{color:'#9fadb8', boxWidth:10, font:{family:"'Inter',sans-serif", size:11}} } },
+      scales:{
+        x:{ ticks:{color:'#6b7885', font:{size:11}}, grid:{color:'rgba(255,255,255,0.04)'} },
+        y:{ ticks:{color:'#6b7885', font:{size:11}}, grid:{color:'rgba(255,255,255,0.04)'} }
+      }
+    }
+  });
+
+  // radar - top 5 by points
+  const top5 = [...players].sort((a,b)=>b.points-a.points).slice(0,5);
+  const maxKills = Math.max(...players.map(p=>p.kills)) || 1;
+  const maxAssists = Math.max(...players.map(p=>p.assists)) || 1;
+  const maxMvp = Math.max(...players.map(p=>p.mvp)) || 1;
+  const maxAvg = Math.max(...players.map(p=>p.avgPoints)) || 1;
+  const maxKd = Math.max(...players.map(p=>p.kd)) || 1;
+  new Chart(document.getElementById('chart-radar'), {
+    type:'radar',
+    data:{
+      labels:['Kills','Assistências','MVPs','Média de pontos','K/D'],
+      datasets: top5.map((p,i)=>({
+        label:p.name,
+        data:[ p.kills/maxKills*100, p.assists/maxAssists*100, p.mvp/maxMvp*100, p.avgPoints/maxAvg*100, p.kd/maxKd*100 ],
+        borderColor: colorFor(i), backgroundColor: colorFor(i)+'26', pointBackgroundColor: colorFor(i), borderWidth:2
+      }))
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{color:'#9fadb8', boxWidth:10, font:{size:11}} } },
+      scales:{ r:{
+        angleLines:{color:'rgba(255,255,255,0.08)'}, grid:{color:'rgba(255,255,255,0.08)'},
+        pointLabels:{color:'#9fadb8', font:{size:11}}, ticks:{display:false}, suggestedMin:0, suggestedMax:100
+      } }
+    }
+  });
+
+  // mvp doughnut
+  const withMvp = players.filter(p=>p.mvp>0).sort((a,b)=>b.mvp-a.mvp);
+  new Chart(document.getElementById('chart-mvp'), {
+    type:'doughnut',
+    data:{ labels: withMvp.map(p=>p.name), datasets:[{ data: withMvp.map(p=>p.mvp), backgroundColor: withMvp.map((_,i)=>colorFor(i)), borderColor:'#171d24', borderWidth:3 }] },
+    options:{
+      responsive:true, maintainAspectRatio:false, cutout:'62%',
+      plugins:{ legend:{ position:'bottom', labels:{color:'#9fadb8', boxWidth:10, font:{size:11}} } }
+    }
+  });
+
+  // reveal-on-scroll for cards & panels
+  const toReveal = document.querySelectorAll('.card, .panel');
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach((e,i)=>{
+      if(e.isIntersecting){
+        e.target.style.animationDelay = (i*0.05)+'s';
+        e.target.classList.add('reveal');
+        io.unobserve(e.target);
+      }
+    });
+  }, {threshold:0.12});
+  toReveal.forEach(el=>io.observe(el));
+}
+
+function baseBarOptions(){
+  return {
+    indexAxis:'y', responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false} },
+    scales:{
+      x:{ ticks:{color:'#6b7885', font:{size:11}}, grid:{color:'rgba(255,255,255,0.04)'} },
+      y:{ ticks:{color:'#eef2f5', font:{size:12, family:"'Inter',sans-serif"}}, grid:{display:false} }
+    }
+  };
+}
+
+let sortState = {key:'points', dir:-1};
+let currentPlayers = [];
+
+function renderTable(players){
+  currentPlayers = players;
+  document.querySelectorAll('#stats-table thead th').forEach(th=>{
+    th.onclick = ()=>{
+      const key = th.dataset.key;
+      sortState.dir = (sortState.key===key) ? -sortState.dir : -1;
+      sortState.key = key;
+      drawTableBody();
+    };
+  });
+  drawTableBody();
+}
+
+function drawTableBody(){
+  const {key, dir} = sortState;
+  const rows = [...currentPlayers].sort((a,b)=>{
+    const av = typeof a[key]==='string' ? a[key].toLowerCase() : a[key];
+    const bv = typeof b[key]==='string' ? b[key].toLowerCase() : b[key];
+    if(av<bv) return -1*dir; if(av>bv) return 1*dir; return 0;
+  });
+  document.querySelectorAll('#stats-table thead th').forEach(th=>{
+    th.innerHTML = th.textContent.replace(' ▲','').replace(' ▼','') + (th.dataset.key===key ? (dir===1?' <span class="arrow">▲</span>':' <span class="arrow">▼</span>') : '');
+  });
+  document.getElementById('table-body').innerHTML = rows.map((p,i)=>`
+    <tr>
+      <td><span class="pos">${i+1}</span>${p.name}</td>
+      <td>${fmt(p.matchesPlayed)}</td>
+      <td>${fmt(p.kills)}</td>
+      <td>${fmt(p.deaths)}</td>
+      <td>${fmt(p.assists)}</td>
+      <td class="${p.kd>=1?'kd-good':'kd-bad'}">${fmt(p.kd,2)}</td>
+      <td>${fmt(p.mvp)}</td>
+      <td>${fmt(p.points)}</td>
+      <td>${fmt(p.avgPoints,1)}</td>
+    </tr>
+  `).join('');
+}
+
+boot();
+</script>
+</body>
+</html>
