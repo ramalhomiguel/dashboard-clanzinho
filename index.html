@@ -243,6 +243,26 @@
       </div>
     </section>
 
+    <section class="section">
+      <div class="section-head"><span class="idx">06</span><h2>Médias por partida</h2><div class="rule"></div></div>
+      <p class="hint" style="margin:-10px 0 16px;">Todos os totais divididos pelo número de partidas de cada jogador — compara quem rende mais por partida, independente de quantas jogou</p>
+      <div class="table-scroll">
+        <table id="stats-table-avg">
+          <thead><tr>
+            <th data-key="name">Jogador</th>
+            <th data-key="matchesPlayed">Partidas</th>
+            <th data-key="killsAvg">Kills/Partida</th>
+            <th data-key="deathsAvg">Mortes/Partida</th>
+            <th data-key="assistsAvg">Assist./Partida</th>
+            <th data-key="kd">K/D</th>
+            <th data-key="mvpAvg">MVPs/Partida</th>
+            <th data-key="avgPoints">Pontos/Partida</th>
+          </tr></thead>
+          <tbody id="table-body-avg"></tbody>
+        </table>
+      </div>
+    </section>
+
     <footer>
       <span>Gerado automaticamente a partir de database.xlsx</span>
       <span id="hud-updated-2">—</span>
@@ -299,6 +319,10 @@ function aggregate(rows){
       matchesPlayed,
       kd: p.deaths>0 ? p.kills/p.deaths : p.kills,
       avgPoints: matchesPlayed>0 ? p.points/matchesPlayed : 0,
+      killsAvg: matchesPlayed>0 ? p.kills/matchesPlayed : 0,
+      deathsAvg: matchesPlayed>0 ? p.deaths/matchesPlayed : 0,
+      assistsAvg: matchesPlayed>0 ? p.assists/matchesPlayed : 0,
+      mvpAvg: matchesPlayed>0 ? p.mvp/matchesPlayed : 0,
     };
   });
 }
@@ -346,8 +370,9 @@ function render(rows){
     </div>`
   ).join('');
 
-  // table
+  // tables
   renderTable(players);
+  renderAvgTable(players);
 
   // charts
   const sortedByKills = [...players].sort((a,b)=>b.kills-a.kills);
@@ -490,6 +515,46 @@ function drawTableBody(){
       <td class="${p.kd>=1?'kd-good':'kd-bad'}">${fmt(p.kd,2)}</td>
       <td>${fmt(p.mvp)}</td>
       <td>${fmt(p.points)}</td>
+      <td>${fmt(p.avgPoints,1)}</td>
+    </tr>
+  `).join('');
+}
+
+let sortStateAvg = {key:'avgPoints', dir:-1};
+let currentPlayersAvg = [];
+
+function renderAvgTable(players){
+  currentPlayersAvg = players;
+  document.querySelectorAll('#stats-table-avg thead th').forEach(th=>{
+    th.onclick = ()=>{
+      const key = th.dataset.key;
+      sortStateAvg.dir = (sortStateAvg.key===key) ? -sortStateAvg.dir : -1;
+      sortStateAvg.key = key;
+      drawAvgTableBody();
+    };
+  });
+  drawAvgTableBody();
+}
+
+function drawAvgTableBody(){
+  const {key, dir} = sortStateAvg;
+  const rows = [...currentPlayersAvg].sort((a,b)=>{
+    const av = typeof a[key]==='string' ? a[key].toLowerCase() : a[key];
+    const bv = typeof b[key]==='string' ? b[key].toLowerCase() : b[key];
+    if(av<bv) return -1*dir; if(av>bv) return 1*dir; return 0;
+  });
+  document.querySelectorAll('#stats-table-avg thead th').forEach(th=>{
+    th.innerHTML = th.textContent.replace(' ▲','').replace(' ▼','') + (th.dataset.key===key ? (dir===1?' <span class="arrow">▲</span>':' <span class="arrow">▼</span>') : '');
+  });
+  document.getElementById('table-body-avg').innerHTML = rows.map((p,i)=>`
+    <tr>
+      <td><span class="pos">${i+1}</span>${p.name}</td>
+      <td>${fmt(p.matchesPlayed)}</td>
+      <td>${fmt(p.killsAvg,1)}</td>
+      <td>${fmt(p.deathsAvg,1)}</td>
+      <td>${fmt(p.assistsAvg,1)}</td>
+      <td class="${p.kd>=1?'kd-good':'kd-bad'}">${fmt(p.kd,2)}</td>
+      <td>${fmt(p.mvpAvg,2)}</td>
       <td>${fmt(p.avgPoints,1)}</td>
     </tr>
   `).join('');
